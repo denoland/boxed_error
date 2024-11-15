@@ -124,7 +124,7 @@ pub fn derive_boxed(item: TokenStream) -> TokenStream {
 
     impl std::error::Error for #error_name {
       fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-          Some(self.0.as_ref())
+        self.0.source()
       }
     }
 
