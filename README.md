@@ -1,6 +1,6 @@
 # boxed_error
 
-Experimental opinionated way to easily box errors.
+Experimental opinionated way to provide helper methods for use with boxing errors.
 
 Before:
 
@@ -52,7 +52,7 @@ After:
 use boxed_error::Boxed;
 use thiserror::Error;
 
-#[derive(Debug, Error, Boxed)]
+#[derive(Debug, Boxed)]
 pub enum DenoResolveError(pub Box<DenoResolveErrorKind>);
 
 #[derive(Debug, Error)]
