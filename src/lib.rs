@@ -1,75 +1,139 @@
-// Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
+// Copyright 2018-2024 the Deno authors. MIT license.
 
-use std::borrow::Cow;
+#![deny(clippy::print_stderr)]
+#![deny(clippy::print_stdout)]
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, Error, Ident, LitStr};
+use syn::parse_macro_input;
+use syn::spanned::Spanned;
+use syn::Data;
+use syn::DeriveInput;
+use syn::Error;
+use syn::Ident;
+use syn::Type;
 
-#[proc_macro_attribute]
-pub fn boxed(attr: TokenStream, item: TokenStream) -> TokenStream {
+#[proc_macro_derive(Boxed)]
+pub fn derive_boxed(item: TokenStream) -> TokenStream {
   let input = parse_macro_input!(item as DeriveInput);
-  let mut specified_struct_name: Option<LitStr> = None;
-  let parser = syn::meta::parser(|meta| {
-    if meta.path.is_ident("name") {
-      specified_struct_name = Some(meta.value()?.parse()?);
-      Ok(())
-    } else {
-      Err(meta.error("unsupported property"))
-    }
-  });
-  parse_macro_input!(attr with parser);
-
-  // retrieve the struct name from the input
-  let struct_name = input.ident.clone();
-  let struct_name_str = struct_name.to_string();
-  let new_error_struct_name = match specified_struct_name {
-    Some(name) => Cow::Owned(name.value()),
-    None => match struct_name_str.strip_suffix("Kind") {
-      Some(name) => Cow::Borrowed(name),
-      None => {
-        let error = Error::new(struct_name.span(), "Struct name must end with 'Kind' or you must the name of the error struct as an argument to the attribute (ex. #[boxed_error(MyError)]");
+  let error_name = &input.ident;
+  let field_type = match &input.data {
+    Data::Struct(data_struct) => {
+      // Check if the struct has exactly one field
+      if data_struct.fields.len() != 1 {
+        let error = Error::new(
+          error_name.span(),
+          "Struct must have exactly one field of type `Box<T>`",
+        );
         return TokenStream::from(error.to_compile_error());
       }
-    },
+
+      // Extract the type of the single field
+      let field = data_struct.fields.iter().next().unwrap();
+      &field.ty
+    }
+    _ => {
+      let error = Error::new(
+        error_name.span(),
+        "Boxed can only be derived on structs with a single field",
+      );
+      return TokenStream::from(error.to_compile_error());
+    }
+  };
+  let inner_type = match field_type {
+    Type::Path(type_path) => {
+      if type_path.path.segments.len() == 1
+        && type_path.path.segments[0].ident == "Box"
+      {
+        // Extract the inner type from `Box<T>`
+        match &type_path.path.segments[0].arguments {
+          syn::PathArguments::AngleBracketed(args) => {
+            if args.args.len() == 1 {
+              if let syn::GenericArgument::Type(inner) = &args.args[0] {
+                inner
+              } else {
+                let error = Error::new(
+                  field_type.span(),
+                  "Expected a single generic argument in `Box<T>`",
+                );
+                return TokenStream::from(error.to_compile_error());
+              }
+            } else {
+              let error = Error::new(
+                field_type.span(),
+                "Expected a single generic argument in `Box<T>`",
+              );
+              return TokenStream::from(error.to_compile_error());
+            }
+          }
+          _ => {
+            let error = Error::new(
+              field_type.span(),
+              "Expected angle-bracketed arguments in `Box<T>`",
+            );
+            return TokenStream::from(error.to_compile_error());
+          }
+        }
+      } else {
+        let error =
+          Error::new(field_type.span(), "Field must be of type `Box<T>`");
+        return TokenStream::from(error.to_compile_error());
+      }
+    }
+    _ => {
+      let error =
+        Error::new(field_type.span(), "Field must be of type `Box<T>`");
+      return TokenStream::from(error.to_compile_error());
+    }
+  };
+  let inner_name = match inner_type {
+    Type::Path(type_path) => &type_path.path.segments[0].ident,
+    _ => {
+      let error =
+        Error::new(inner_type.span(), "Expected an identifier in `Box<T>`");
+      return TokenStream::from(error.to_compile_error());
+    }
+  };
+  let inner_name_str = inner_name.to_string();
+  let expected_suffix = if inner_name_str.ends_with("Kind") {
+    "kind"
+  } else if inner_name_str.ends_with("Data") {
+    "data"
+  } else {
+    "inner"
   };
 
-  let error_name = Ident::new(&new_error_struct_name, struct_name.span());
+  let as_name =
+    Ident::new(&format!("as_{}", expected_suffix), error_name.span());
+  let into_name =
+    Ident::new(&format!("into_{}", expected_suffix), error_name.span());
 
   // generate the code for the wrapper struct and implementations
   let expanded = quote! {
-    // original struct definition
-    #input
-
-    // implement a method to box the kind into the error wrapper
-    impl #struct_name {
+    impl #inner_name {
       pub fn into_box(self) -> #error_name {
         #error_name(Box::new(self))
       }
     }
 
-    // define the boxed error wrapper struct
-    #[derive(Debug)]
-    pub struct #error_name(pub Box<#struct_name>);
-
     impl std::fmt::Display for #error_name {
       fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
+        std::fmt::Display::fmt(&self.0, f)
       }
     }
 
-    impl std::error::Error for #error_name where #struct_name: std::error::Error {
+    impl std::error::Error for #error_name {
       fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
           Some(self.0.as_ref())
       }
     }
 
     impl #error_name {
-      pub fn as_kind(&self) -> &#struct_name {
+      pub fn #as_name(&self) -> &#inner_name {
         &self.0
       }
 
-      pub fn into_kind(self) -> #struct_name {
+      pub fn #into_name(self) -> #inner_name {
         *self.0
       }
     }
@@ -77,10 +141,10 @@ pub fn boxed(attr: TokenStream, item: TokenStream) -> TokenStream {
     // implement conversion from other errors into the boxed error
     impl<E> From<E> for #error_name
     where
-      #struct_name: From<E>,
+      #inner_name: From<E>,
     {
       fn from(err: E) -> Self {
-        #error_name(Box::new(#struct_name::from(err)))
+        #error_name(Box::new(#inner_name::from(err)))
       }
     }
   };

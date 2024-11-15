@@ -1,7 +1,7 @@
 [package]
 name = "boxed_error"
 description = "Macro for easily boxing an error"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["the Deno authors"]
 license = "MIT"
@@ -13,3 +13,6 @@ proc-macro = true
 [dependencies]
 quote = "1.0.37"
 syn = "2.0.87"
+
+[dev-dependencies]
+thiserror = "2.0"

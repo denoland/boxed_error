@@ -7,21 +7,6 @@ Before:
 ```rs
 use thiserror::Error;
 
-#[derive(Debug, Error)]
-pub enum DenoResolveErrorKind {
-  #[error("Importing ...")]
-  InvalidVendorFolderImport,
-  #[error(transparent)]
-  MappedResolution(#[from] MappedResolutionError),
-  // ...
-}
-
-impl DenoResolveErrorKind {
-  pub fn into_box(self) -> DenoResolveError {
-    DenoResolveError(Box::new(self))
-  }
-}
-
 #[derive(Error, Debug)]
 #[error(transparent)]
 pub struct DenoResolveError(pub Box<DenoResolveErrorKind>);
@@ -44,16 +29,33 @@ where
     DenoResolveError(Box::new(DenoResolveErrorKind::from(err)))
   }
 }
+
+#[derive(Debug, Error)]
+pub enum DenoResolveErrorKind {
+  #[error("Importing ...")]
+  InvalidVendorFolderImport,
+  #[error(transparent)]
+  MappedResolution(#[from] MappedResolutionError),
+  // ...
+}
+
+impl DenoResolveErrorKind {
+  pub fn into_box(self) -> DenoResolveError {
+    DenoResolveError(Box::new(self))
+  }
+}
 ```
 
 After:
 
 ```rs
-use boxed_error::boxed;
+use boxed_error::Boxed;
 use thiserror::Error;
 
+#[derive(Debug, Error, Boxed)]
+pub enum DenoResolveError(pub Box<DenoResolveErrorKind>);
+
 #[derive(Debug, Error)]
-#[boxed]
 pub enum DenoResolveErrorKind {
   #[error("Importing ...")]
   InvalidVendorFolderImport,
