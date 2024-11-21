@@ -128,6 +128,14 @@ pub fn derive_boxed(item: TokenStream) -> TokenStream {
       }
     }
 
+    impl std::ops::Deref for #error_name {
+      type Target = #inner_name;
+
+      fn deref(&self) -> &Self::Target {
+        &self.0
+      }
+    }
+
     impl #error_name {
       pub fn #as_name(&self) -> &#inner_name {
         &self.0
