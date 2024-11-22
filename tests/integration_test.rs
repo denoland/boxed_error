@@ -20,6 +20,14 @@ fn test_boxed_enum_error() {
     MyErrorKind::Io(std::io::Error::new(ErrorKind::NotFound, "File not found"))
       .into_box();
   assert_eq!(error.to_string(), "File not found");
+  assert_eq!(
+    std::any::type_name_of_val(error.as_kind()),
+    "integration_test::test_boxed_enum_error::MyErrorKind"
+  );
+  assert_eq!(
+    std::any::type_name_of_val(&*error),
+    "integration_test::test_boxed_enum_error::MyErrorKind"
+  );
 }
 
 #[test]
@@ -45,4 +53,12 @@ fn test_boxed_struct_error() {
   }
   .into_box();
   assert_eq!(error.to_string(), "error: My error");
+  assert_eq!(
+    std::any::type_name_of_val(error.as_data()),
+    "integration_test::test_boxed_struct_error::MyErrorData"
+  );
+  assert_eq!(
+    std::any::type_name_of_val(&*error),
+    "integration_test::test_boxed_struct_error::MyErrorData"
+  );
 }
