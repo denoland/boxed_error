@@ -8,6 +8,7 @@ fn test_boxed_enum_error() {
   #[derive(Debug, Boxed)]
   pub struct MyError(pub Box<MyErrorKind>);
 
+  #[allow(dead_code)]
   #[derive(Debug, Error)]
   pub enum MyErrorKind {
     #[error(transparent)]
