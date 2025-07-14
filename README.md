@@ -53,7 +53,7 @@ use boxed_error::Boxed;
 use thiserror::Error;
 
 #[derive(Debug, Boxed)]
-pub enum DenoResolveError(pub Box<DenoResolveErrorKind>);
+pub struct DenoResolveError(pub Box<DenoResolveErrorKind>);
 
 #[derive(Debug, Error)]
 pub enum DenoResolveErrorKind {
